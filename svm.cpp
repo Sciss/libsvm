@@ -816,6 +816,8 @@ int Solver::select_working_set(int &out_i, int &out_j)
 					Gmax_idx = t;
 				}
 		}
+	
+	info("[DEBUG] selectWorkingSet; activeSize = %d; maxGrad %g; mxi %d\n", active_size, Gmax, Gmax_idx);
 
 	int i = Gmax_idx;
 	const Qfloat *Q_i = NULL;
@@ -2140,6 +2142,8 @@ svm_model *svm_train(const svm_problem *prob, const svm_parameter *param)
 	}
 	else
 	{
+		info("Aqui1.\n");
+		
 		// classification
 		int l = prob->l;
 		int nr_class;
@@ -2150,6 +2154,11 @@ svm_model *svm_train(const svm_problem *prob, const svm_parameter *param)
 
 		// group training data of the same class
 		svm_group_classes(prob,&nr_class,&label,&start,&count,perm);
+		
+		info("svm_group_classes: nr_class = %d\n",nr_class);
+		// int kkk;
+		// for(kkk=0;
+			
 		if(nr_class == 1) 
 			info("WARNING: training data in only one class. See README for details.\n");
 		
@@ -2215,6 +2224,7 @@ svm_model *svm_train(const svm_problem *prob, const svm_parameter *param)
 					svm_binary_svc_probability(&sub_prob,param,weighted_C[i],weighted_C[j],probA[p],probB[p]);
 
 				f[p] = svm_train_one(&sub_prob,param,weighted_C[i],weighted_C[j]);
+				info("f[%d] = %d\n",p,f[p]);
 				for(k=0;k<ci;k++)
 					if(!nonzero[si+k] && fabs(f[p].alpha[k]) > 0)
 						nonzero[si+k] = true;
