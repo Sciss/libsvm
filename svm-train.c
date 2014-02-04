@@ -85,6 +85,8 @@ int main(int argc, char **argv)
 	char input_file_name[1024];
 	char model_file_name[1024];
 	const char *error_msg;
+	
+	fprintf(stdout, "Pi %g\n", 3.141592653589793e-5);
 
 	parse_command_line(argc, argv, input_file_name, model_file_name);
 	read_problem(input_file_name);

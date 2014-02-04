@@ -449,6 +449,7 @@ private:
 
 void Solver::swap_index(int i, int j)
 {
+	fprintf(stdout, "Solver::swap_index(%d, %d)\n", i, j);
 	Q->swap_index(i,j);
 	swap(y[i],y[j]);
 	swap(G[i],G[j]);
@@ -463,7 +464,11 @@ void Solver::reconstruct_gradient()
 {
 	// reconstruct inactive elements of G from G_bar and free variables
 
-	if(active_size == l) return;
+	if(active_size == l) {
+		info("reconstruct_gradient (false)\n");
+		return;
+	}
+	info("reconstruct_gradient\n");
 
 	int i,j;
 	int nr_free = 0;
@@ -553,6 +558,9 @@ void Solver::Solve(int l, const QMatrix& Q, const double *p_, const schar *y_,
 					for(j=0;j<l;j++)
 						G_bar[j] += get_C(i) * Q_i[j];
 			}
+		
+		info("init(). new gradient:\n");
+		fprintf(stdout, "[499] %g; [1999] %g\n", G[499], G[1999]);
 	}
 
 	// optimization step
@@ -561,8 +569,17 @@ void Solver::Solve(int l, const QMatrix& Q, const double *p_, const schar *y_,
 	int max_iter = max(10000000, l>INT_MAX/100 ? INT_MAX : 100*l);
 	int counter = min(l,1000)+1;
 	
+//	info("y =");
+//	int ii;
+//	for(ii=0; ii<l; ii++) {
+//		info("%d,", y[ii]);
+//	}
+//	info("\n");
+	
 	while(iter < max_iter)
 	{
+		fprintf(stdout, "[DEBUG] iter %d\n", iter);
+		
 		// show progress and do shrinking
 
 		if(--counter == 0)
@@ -601,6 +618,7 @@ void Solver::Solve(int l, const QMatrix& Q, const double *p_, const schar *y_,
 
 		if(y[i]!=y[j])
 		{
+			fprintf(stdout, "y[i]!=y[j]\n");
 			double quad_coef = QD[i]+QD[j]+2*Q_i[j];
 			if (quad_coef <= 0)
 				quad_coef = TAU;
@@ -608,6 +626,8 @@ void Solver::Solve(int l, const QMatrix& Q, const double *p_, const schar *y_,
 			double diff = alpha[i] - alpha[j];
 			alpha[i] += delta;
 			alpha[j] += delta;
+			
+			fprintf(stdout, "diff %g, C_i %g, C_j %g\n", diff, C_i, C_j);
 			
 			if(diff > 0)
 			{
@@ -644,6 +664,7 @@ void Solver::Solve(int l, const QMatrix& Q, const double *p_, const schar *y_,
 		}
 		else
 		{
+			fprintf(stdout, "y[i]==y[j]\n");
 			double quad_coef = QD[i]+QD[j]-2*Q_i[j];
 			if (quad_coef <= 0)
 				quad_coef = TAU;
@@ -651,6 +672,8 @@ void Solver::Solve(int l, const QMatrix& Q, const double *p_, const schar *y_,
 			double sum = alpha[i] + alpha[j];
 			alpha[i] -= delta;
 			alpha[j] += delta;
+
+			fprintf(stdout, "sum  %g, C_i %g, C_j %g\n", sum, C_i, C_j);
 
 			if(sum > C_i)
 			{
@@ -691,6 +714,8 @@ void Solver::Solve(int l, const QMatrix& Q, const double *p_, const schar *y_,
 		double delta_alpha_i = alpha[i] - old_alpha_i;
 		double delta_alpha_j = alpha[j] - old_alpha_j;
 		
+		fprintf(stdout, "delta_alpha_i %g, delta_alpha_j %g\n", delta_alpha_i, delta_alpha_j);
+
 		for(int k=0;k<active_size;k++)
 		{
 			G[k] += Q_i[k]*delta_alpha_i + Q_j[k]*delta_alpha_j;
@@ -703,6 +728,11 @@ void Solver::Solve(int l, const QMatrix& Q, const double *p_, const schar *y_,
 			bool uj = is_upper_bound(j);
 			update_alpha_status(i);
 			update_alpha_status(j);
+
+			if (i == 0 || j == 0) fprintf(stdout, "##### changing alpha_status[0]\n");
+				
+			fprintf(stdout, "old i '%d' new i '%d' old j '%d' new j '%d'\n", ui, is_upper_bound(i), uj, is_upper_bound(j));
+
 			int k;
 			if(ui != is_upper_bound(i))
 			{
@@ -739,6 +769,11 @@ void Solver::Solve(int l, const QMatrix& Q, const double *p_, const schar *y_,
 		}
 		fprintf(stderr,"\nWARNING: reaching max number of iterations\n");
 	}
+	
+	{
+		info("optimize(). new gradient:\n");
+		fprintf(stdout, "[499] %g; [1999] %g\n", G[499], G[1999]);
+	}
 
 	// calculate rho
 
@@ -771,7 +806,7 @@ void Solver::Solve(int l, const QMatrix& Q, const double *p_, const schar *y_,
 	si->upper_bound_p = Cp;
 	si->upper_bound_n = Cn;
 
-	info("\noptimization finished, #iter = %d\n",iter);
+	fprintf(stdout, "\noptimization finished, #iter = %d\n",iter);
 
 	delete[] p;
 	delete[] y;
@@ -785,6 +820,9 @@ void Solver::Solve(int l, const QMatrix& Q, const double *p_, const schar *y_,
 // return 1 if already optimal, return 0 otherwise
 int Solver::select_working_set(int &out_i, int &out_j)
 {
+	info("[DEBUG] \n----select_working_set(). gradient:\n");
+	fprintf(stdout, "[DEBUG] [499] %g; [1999] %g; y[1999] = %d; alpha %d\n", G[499], G[1999], y[1999], alpha_status[1999]);
+
 	// return i,j such that
 	// i: maximizes -y_i * grad(f)_i, i in I_up(\alpha)
 	// j: minimizes the decrease of obj value
@@ -817,22 +855,52 @@ int Solver::select_working_set(int &out_i, int &out_j)
 				}
 		}
 	
-	info("[DEBUG] selectWorkingSet; activeSize = %d; maxGrad %g; mxi %d\n", active_size, Gmax, Gmax_idx);
+//	info("y       = %f\n", d1);
+//	info("maxGrad = %f\n", d2);
+//	info("y       = %f\n", d3);
+//	fprintf(stdout, "y       = %d\n", y[1999]);
+//	fprintf(stdout, "maxGrad = %f\n", Gmax);
+//	fprintf(stdout, "y       = %d\n", y[1999]);
+
+//	double fuckYou1 = y[1999];
+//	info("------ fuckYou1 %f %f\n", (double)y[1999], (double)fuckYou1);
+
+	fprintf(stdout, "[DEBUG] selectWorkingSet; activeSize = %d; maxGrad %g; mxi %d\n", active_size, Gmax, Gmax_idx);
 
 	int i = Gmax_idx;
 	const Qfloat *Q_i = NULL;
+
+	
 	if(i != -1) // NULL Q_i not accessed: Gmax=-INF if i=-1
 		Q_i = Q->get_Q(i,active_size);
+	
+//	double fuckYou = y[1999];
+//	info("------ fuckYou %g\n", fuckYou);
+	
+	// int rrrrr = y[1999]==+1;
 
 	for(int j=0;j<active_size;j++)
 	{
+//		if (fuckYou != y[1999]) {
+//			info("y[1999] magically changes in j = %d\n", j);
+//		}
+		
+//		if (j == 1999) {
+//			int iii = 0;
+//			if (y[j]==+1) iii = 1;
+//			fprintf(stdout, "---------- y[1999] = %d", y[1999]);
+//			fprintf(stdout, "; iii %d\n", iii);
+//		}
+		
 		if(y[j]==+1)
 		{
 			if (!is_lower_bound(j))
 			{
 				double grad_diff=Gmax+G[j];
-				if (G[j] >= Gmax2)
+				if (G[j] > Gmax2) { // was: >=
 					Gmax2 = G[j];
+					fprintf(stdout, "j %d, maxGrad2 %g, isPos true\n", j, Gmax2);
+				}
 				if (grad_diff > 0)
 				{
 					double obj_diff; 
@@ -855,8 +923,10 @@ int Solver::select_working_set(int &out_i, int &out_j)
 			if (!is_upper_bound(j))
 			{
 				double grad_diff= Gmax-G[j];
-				if (-G[j] >= Gmax2)
+				if (-G[j] > Gmax2) {  // was: >=
 					Gmax2 = -G[j];
+					fprintf(stdout, "j %d, maxGrad2 %g, isPos false\n", j, Gmax2);
+				}
 				if (grad_diff > 0)
 				{
 					double obj_diff; 
@@ -875,6 +945,12 @@ int Solver::select_working_set(int &out_i, int &out_j)
 			}
 		}
 	}
+
+	int kkk = 1;
+	if (Gmax+Gmax2 < eps) {
+		kkk = 0;
+	}
+	fprintf(stdout, "[DEBUG] selectWorkingSet; maxGrad2 %g; mni %d; res = %d\n", Gmax2, Gmin_idx, kkk);
 
 	if(Gmax+Gmax2 < eps)
 		return 1;
@@ -948,7 +1024,9 @@ void Solver::do_shrinking()
 		active_size = l;
 		info("*");
 	}
-
+	
+	fprintf(stdout, "doShrinking. G[0] %g, alphaStatus(0) %d\n", G[0], alpha_status[0]);
+	
 	for(i=0;i<active_size;i++)
 		if (be_shrunk(i, Gmax1, Gmax2))
 		{
@@ -1454,6 +1532,7 @@ static void solve_c_svc(
 		alpha[i] = 0;
 		minus_ones[i] = -1;
 		if(prob->y[i] > 0) y[i] = +1; else y[i] = -1;
+		// info("prob[%d].y = %f\n", i, prob->y[i]);
 	}
 
 	Solver s;
@@ -2055,8 +2134,10 @@ static void svm_group_classes(const svm_problem *prob, int *nr_class_ret, int **
 	// However, for two-class sets with -1/+1 labels and -1 appears first, 
 	// we swap labels to ensure that internally the binary SVM has positive data corresponding to the +1 instances.
 	//
+	// info("Aqui2.\n");
 	if (nr_class == 2 && label[0] == -1 && label[1] == 1)
 	{
+		info("INFO: label swap\n");
 		swap(label[0],label[1]);
 		swap(count[0],count[1]);
 		for(i=0;i<l;i++)
@@ -2155,7 +2236,7 @@ svm_model *svm_train(const svm_problem *prob, const svm_parameter *param)
 		// group training data of the same class
 		svm_group_classes(prob,&nr_class,&label,&start,&count,perm);
 		
-		info("svm_group_classes: nr_class = %d\n",nr_class);
+		// info("svm_group_classes: nr_class = %d\n",nr_class);
 		// int kkk;
 		// for(kkk=0;
 			
@@ -2184,6 +2265,11 @@ svm_model *svm_train(const svm_problem *prob, const svm_parameter *param)
 				weighted_C[j] *= param->weight[i];
 		}
 
+//		// HHH
+//		for(i=0;i<nr_class;i++) {
+//			info("weighted_C[%d] = %f\n",i,weighted_C[i]);
+//		}
+			
 		// train k*(k-1)/2 models
 		
 		bool *nonzero = Malloc(bool,l);
@@ -2208,6 +2294,8 @@ svm_model *svm_train(const svm_problem *prob, const svm_parameter *param)
 				sub_prob.l = ci+cj;
 				sub_prob.x = Malloc(svm_node *,sub_prob.l);
 				sub_prob.y = Malloc(double,sub_prob.l);
+//				info("---permutation %d %d---\n", i, j);
+//				info("si %d, sj %d, ci %d ci %d, cj %d\n", si, sj, ci, cj);
 				int k;
 				for(k=0;k<ci;k++)
 				{
@@ -2222,6 +2310,16 @@ svm_model *svm_train(const svm_problem *prob, const svm_parameter *param)
 
 				if(param->probability)
 					svm_binary_svc_probability(&sub_prob,param,weighted_C[i],weighted_C[j],probA[p],probB[p]);
+				
+//				for(k=0;k<sub_prob.l;k++) {
+//					info("[%d] %f",k,sub_prob.y[k]);
+//					int kk;
+//					for (kk = 0; kk < 4;kk++) {
+//						info(" %d:%f",sub_prob.x[k][kk].index, sub_prob.x[k][kk].value);
+//					}
+//					info("\n");
+//				}
+				
 
 				f[p] = svm_train_one(&sub_prob,param,weighted_C[i],weighted_C[j]);
 				info("f[%d] = %d\n",p,f[p]);
